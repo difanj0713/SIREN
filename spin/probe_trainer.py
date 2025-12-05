@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 
 # pytorch-based linear probe with L1 regularization; no scikit-learn implementation here for gpu acceleration
 class LinearProbe:
@@ -99,10 +99,14 @@ class LinearProbe:
         
         return np.array(predictions)
 
-    def evaluate(self, X, y):
+    def evaluate(self, X, y, metric='accuracy'):
         predictions = self.predict(X)
-        accuracy = accuracy_score(y, predictions)
-        return accuracy
+        if metric == 'accuracy':
+            return accuracy_score(y, predictions)
+        elif metric == 'f1_macro':
+            return f1_score(y, predictions, average='macro')
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
 
     def get_feature_importance(self):
         if not self.trained:
@@ -117,29 +121,29 @@ def extract_layer_features(representations, layer_idx, rep_type, pooling):
         features.append(rep[layer_idx][key])
     return np.array(features)
 
-def train_and_evaluate_probe(train_reps, train_labels, val_reps, val_labels, layer_idx, rep_type, pooling, C_values, device="cuda"):
+def train_and_evaluate_probe(train_reps, train_labels, val_reps, val_labels, layer_idx, rep_type, pooling, C_values, device="cuda", metric='accuracy'):
     X_train = extract_layer_features(train_reps, layer_idx, rep_type, pooling)
     X_val = extract_layer_features(val_reps, layer_idx, rep_type, pooling)
-    
+
     best_C = None
-    best_val_acc = 0
-    
+    best_val_score = 0
+
     for C in C_values:
         probe = LinearProbe(C=C, device=device)
         probe.train(X_train, train_labels, X_val, val_labels, quick_eval=True)
-        val_acc = probe.evaluate(X_val, val_labels)
-        print(f"    C={C}: val_acc={val_acc:.4f}")
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        val_score = probe.evaluate(X_val, val_labels, metric=metric)
+        print(f"    C={C}: val_{metric}={val_score:.4f}")
+
+        if val_score > best_val_score:
+            best_val_score = val_score
             best_C = C
-    
-    print(f"    Best C={best_C} with val_acc={best_val_acc:.4f}")
-    
+
+    print(f"    Best C={best_C} with val_{metric}={best_val_score:.4f}")
+
     final_probe = LinearProbe(C=best_C, device=device)
     final_probe.train(X_train, train_labels, X_val, val_labels, quick_eval=False)
-    
-    train_acc = final_probe.evaluate(X_train, train_labels)
-    val_acc = final_probe.evaluate(X_val, val_labels)
-    
-    return final_probe, train_acc, val_acc, best_C
+
+    train_score = final_probe.evaluate(X_train, train_labels, metric=metric)
+    val_score = final_probe.evaluate(X_val, val_labels, metric=metric)
+
+    return final_probe, train_score, val_score, best_C

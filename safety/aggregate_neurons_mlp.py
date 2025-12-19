@@ -170,6 +170,8 @@ if __name__ == "__main__":
 
     with open(f"representations/{args.model}_{args.dataset}_train.pkl", "rb") as f:
         train_data = pickle.load(f)
+    with open(f"representations/{args.model}_{args.dataset}_validation.pkl", "rb") as f:
+        val_data = pickle.load(f)
     with open(f"representations/{args.model}_{args.dataset}_test.pkl", "rb") as f:
         test_data = pickle.load(f)
     with open(f"probes/{args.model}_{args.dataset}_probes.pkl", "rb") as f:
@@ -177,17 +179,19 @@ if __name__ == "__main__":
 
     train_reps = train_data["representations"]
     train_labels = train_data["labels"]
+    val_reps = val_data["representations"]
+    val_labels = val_data["labels"]
     test_reps = test_data["representations"]
     test_labels = test_data["labels"]
     num_layers = train_data["num_layers"]
     best_probes = probe_data["best_probes"]
 
-    val_split_ratio = 0.2
-    val_size = int(len(train_labels) * val_split_ratio)
-    val_reps = train_reps[:val_size]
-    val_labels = train_labels[:val_size]
-    train_reps = train_reps[val_size:]
-    train_labels = train_labels[val_size:]
+    # val_split_ratio = 0.2
+    # val_size = int(len(train_labels) * val_split_ratio)
+    # val_reps = train_reps[:val_size]
+    # val_labels = train_labels[:val_size]
+    # train_reps = train_reps[val_size:]
+    # train_labels = train_labels[val_size:]
 
     print(f"\nTrain samples: {len(train_labels)}")
     print(f"Validation samples: {len(val_labels)}")

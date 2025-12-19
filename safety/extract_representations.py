@@ -9,6 +9,7 @@ from datasets import load_dataset
 
 from config import DATASET_CONFIGS, MODEL_CONFIGS
 from model_hooks import Qwen3RepresentationExtractor
+from preprocess import preprocess_dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model", type=str, default="qwen3-0.6b")
@@ -17,7 +18,7 @@ parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--device", type=str, default="cuda")
 args = parser.parse_args()
 
-dataset_config = DATASET_CONFIGS[args.dataset]
+# dataset_config = DATASET_CONFIGS[args.dataset]
 model_config = MODEL_CONFIGS[args.model]
 
 print(f"Model: {args.model}")
@@ -32,15 +33,17 @@ extractor = Qwen3RepresentationExtractor(
 )
 extractor.register_hooks()
 
-if dataset_config["hf_config"]:
-    dataset = load_dataset(dataset_config["hf_name"], dataset_config["hf_config"])
-else:
-    dataset = load_dataset(dataset_config["hf_name"])
+# if dataset_config["hf_config"]:
+#     dataset = load_dataset(dataset_config["hf_name"], dataset_config["hf_config"])
+# else:
+#     dataset = load_dataset(dataset_config["hf_name"])
+dataset = preprocess_dataset(args.dataset)
 
-for split_name, split_key in dataset_config["splits"].items():
+# for split_name, split_key in dataset_config["splits"].items():
+for split_name, split_data in dataset.items():
     print(f"\nProcessing {split_name} split...")
 
-    split_data = dataset[split_key]
+    # split_data = dataset[split_key]
     all_representations = []
     all_labels = []
 
@@ -48,8 +51,10 @@ for split_name, split_key in dataset_config["splits"].items():
     batch_labels = []
 
     for idx, item in enumerate(tqdm(split_data)):
-        text = item[dataset_config["text_field"]]
-        label = item[dataset_config["label_field"]]
+        # text = item[dataset_config["text_field"]]
+        # label = item[dataset_config["label_field"]]
+        text = item["text"]
+        label = item["label"]
 
         batch_texts.append(text)
         batch_labels.append(label)

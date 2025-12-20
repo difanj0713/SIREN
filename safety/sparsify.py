@@ -14,6 +14,7 @@ parser.add_argument("--model", type=str, default="qwen3-0.6b")
 parser.add_argument("--dataset", type=str, default="toxic_chat")
 parser.add_argument("--c_values", type=float, nargs="+", default=[1.0, 5.0, 10.0, 50.0, 100.0])
 parser.add_argument("--device", type=str, default="cuda")
+parser.add_argument("--rep_types", type=str, nargs="+", default=["residual_mean", "mlp_mean"])
 args = parser.parse_args()
 
 device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -37,13 +38,6 @@ test_reps = test_data["representations"]
 test_labels = test_data["labels"]
 num_layers = train_data["num_layers"]
 
-# val_split_ratio = 0.2
-# val_size = int(len(train_labels) * val_split_ratio)
-# val_reps = train_reps[:val_size]
-# val_labels = train_labels[:val_size]
-# train_reps = train_reps[val_size:]
-# train_labels = train_labels[val_size:]
-
 print(f"\nTrain samples: {len(train_labels)}")
 print(f"Validation samples: {len(val_labels)}")
 print(f"Test samples: {len(test_labels)}")
@@ -52,46 +46,49 @@ print(f"Number of layers: {num_layers}")
 best_probes = {}
 all_results = []
 
-for rep_type in REPRESENTATION_TYPES:
-    for pooling in POOLING_STRATEGIES:
-        print(f"\nTraining {rep_type}_{pooling} probes...")
+pooling_types = args.rep_types
 
-        for layer_idx in range(num_layers):
-            probe, train_f1, val_f1, best_C = train_and_evaluate_probe(
-                train_reps, train_labels,
-                val_reps, val_labels,
-                layer_idx, rep_type, pooling, args.c_values, device, metric='f1_macro'
-            )
+for pooling_type in pooling_types:
+    print(f"\nTraining {pooling_type} probes...")
 
-            test_X = extract_layer_features(test_reps, layer_idx, rep_type, pooling)
-            test_f1 = probe.evaluate(test_X, test_labels, metric='f1_macro')
-            test_acc = probe.evaluate(test_X, test_labels, metric='accuracy')
+    for layer_idx in range(num_layers):
+        rep_type, pooling = pooling_type.split("_")[0], "_".join(pooling_type.split("_")[1:])
 
-            key = f"layer{layer_idx}_{rep_type}_{pooling}"
-            best_probes[key] = {
-                "layer": layer_idx,
-                "rep_type": rep_type,
-                "pooling": pooling,
-                "best_C": best_C,
-                "train_f1": train_f1,
-                "val_f1": val_f1,
-                "test_f1": test_f1,
-                "test_acc": test_acc,
-                "probe": probe
-            }
+        probe, train_f1, val_f1, best_C = train_and_evaluate_probe(
+            train_reps, train_labels,
+            val_reps, val_labels,
+            layer_idx, rep_type, pooling, args.c_values, device, metric='f1_macro'
+        )
 
-            all_results.append({
-                "layer": layer_idx,
-                "rep_type": rep_type,
-                "pooling": pooling,
-                "C": best_C,
-                "train_f1": train_f1,
-                "val_f1": val_f1,
-                "test_f1": test_f1,
-                "test_acc": test_acc
-            })
+        test_X = extract_layer_features(test_reps, layer_idx, rep_type, pooling)
+        test_f1 = probe.evaluate(test_X, test_labels, metric='f1_macro')
+        test_acc = probe.evaluate(test_X, test_labels, metric='accuracy')
 
-            print(f"  Layer {layer_idx:2d}: Train_F1={train_f1:.4f} Val_F1={val_f1:.4f} Test_F1={test_f1:.4f} Test_Acc={test_acc:.4f} C={best_C}")
+        key = f"layer{layer_idx}_{pooling_type}"
+        best_probes[key] = {
+            "layer": layer_idx,
+            "rep_type": rep_type,
+            "pooling": pooling,
+            "best_C": best_C,
+            "train_f1": train_f1,
+            "val_f1": val_f1,
+            "test_f1": test_f1,
+            "test_acc": test_acc,
+            "probe": probe
+        }
+
+        all_results.append({
+            "layer": layer_idx,
+            "rep_type": rep_type,
+            "pooling": pooling,
+            "C": best_C,
+            "train_f1": train_f1,
+            "val_f1": val_f1,
+            "test_f1": test_f1,
+            "test_acc": test_acc
+        })
+
+        print(f"  Layer {layer_idx:2d}: Train_F1={train_f1:.4f} Val_F1={val_f1:.4f} Test_F1={test_f1:.4f} Test_Acc={test_acc:.4f} C={best_C}")
 
 output = {
     "best_probes": best_probes,
@@ -109,7 +106,7 @@ print(f"\nSaved probes to {output_file}")
 print("\nTop 10 best probes by validation F1:")
 sorted_probes = sorted(best_probes.items(), key=lambda x: x[1]["val_f1"], reverse=True)
 for i, (key, info) in enumerate(sorted_probes[:10]):
-    print(f"{i+1}. {key}: val_f1={info['val_f1']:.4f}, test_f1={info['test_f1']:.4f}, test_acc={info['test_acc']:.4f}, C={info['best_C']}")
+    print(f"{i+1}. {key}: val_f1={info['val_f1']:.4f}, test_f1={info['test_f1']:.4f}, C={info['best_C']}")
 
 results_file = f"probes/{args.model}_{args.dataset}_results.json"
 json_results = {

@@ -8,7 +8,7 @@ HarmBench: https://huggingface.co/datasets/walledai/HarmBench                   
 WildguardTest: https://huggingface.co/datasets/allenai/wildguardmix
 SafeRLHF: https://huggingface.co/datasets/PKU-Alignment/PKU-SafeRLHF
 Beavertails: https://huggingface.co/datasets/PKU-Alignment/BeaverTails
-XSTest: https://huggingface.co/datasets/Paul/XSTest
+XSTest: https://huggingface.co/datasets/Paul/XSTest       # Only has test set
 """
 from datasets import DatasetDict, load_dataset
 

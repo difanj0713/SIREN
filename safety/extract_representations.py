@@ -16,9 +16,9 @@ parser.add_argument("--model", type=str, default="qwen3-0.6b")
 parser.add_argument("--dataset", type=str, default="toxic_chat")
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--device", type=str, default="cuda")
+parser.add_argument("--rep_types", type=str, nargs="+", default=["residual_mean", "mlp_mean"])
 args = parser.parse_args()
 
-# dataset_config = DATASET_CONFIGS[args.dataset]
 model_config = MODEL_CONFIGS[args.model]
 
 print(f"Model: {args.model}")
@@ -29,21 +29,15 @@ print(f"Number of layers: {model_config['num_layers']}")
 extractor = Qwen3RepresentationExtractor(
     model_config["model_path"],
     device=args.device,
-    batch_size=args.batch_size
+    batch_size=args.batch_size,
+    rep_types=args.rep_types
 )
 extractor.register_hooks()
-
-# if dataset_config["hf_config"]:
-#     dataset = load_dataset(dataset_config["hf_name"], dataset_config["hf_config"])
-# else:
-#     dataset = load_dataset(dataset_config["hf_name"])
 dataset = preprocess_dataset(args.dataset)
 
-# for split_name, split_key in dataset_config["splits"].items():
 for split_name, split_data in dataset.items():
     print(f"\nProcessing {split_name} split...")
 
-    # split_data = dataset[split_key]
     all_representations = []
     all_labels = []
 
@@ -51,8 +45,6 @@ for split_name, split_data in dataset.items():
     batch_labels = []
 
     for idx, item in enumerate(tqdm(split_data)):
-        # text = item[dataset_config["text_field"]]
-        # label = item[dataset_config["label_field"]]
         text = item["text"]
         label = item["label"]
 

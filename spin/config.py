@@ -35,5 +35,6 @@ MODEL_CONFIGS = {
     }
 }
 
-POOLING_STRATEGIES = ["mean", "last"]
+# POOLING_STRATEGIES = ["mean", "last"]
+POOLING_STRATEGIES = ["mean"]
 REPRESENTATION_TYPES = ["residual", "mlp"]

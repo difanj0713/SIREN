@@ -8,7 +8,7 @@ from tqdm import tqdm
 from datasets import load_dataset
 
 from config import DATASET_CONFIGS, MODEL_CONFIGS
-from model_hooks import Qwen3RepresentationExtractor
+from model_hooks import Qwen3RepresentationExtractor, Gemma3RepresentationExtractor
 from preprocess import preprocess_dataset
 
 parser = argparse.ArgumentParser()
@@ -26,12 +26,21 @@ print(f"Dataset: {args.dataset}")
 print(f"Batch size: {args.batch_size}")
 print(f"Number of layers: {model_config['num_layers']}")
 
-extractor = Qwen3RepresentationExtractor(
-    model_config["model_path"],
-    device=args.device,
-    batch_size=args.batch_size,
-    rep_types=args.rep_types
-)
+model_type = model_config.get("model_type", "qwen3")
+if model_type == "gemma3":
+    extractor = Gemma3RepresentationExtractor(
+        model_config["model_path"],
+        device=args.device,
+        batch_size=args.batch_size,
+        rep_types=args.rep_types
+    )
+else:
+    extractor = Qwen3RepresentationExtractor(
+        model_config["model_path"],
+        device=args.device,
+        batch_size=args.batch_size,
+        rep_types=args.rep_types
+    )
 extractor.register_hooks()
 dataset = preprocess_dataset(args.dataset)
 

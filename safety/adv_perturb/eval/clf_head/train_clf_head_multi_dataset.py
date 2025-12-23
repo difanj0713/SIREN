@@ -7,10 +7,46 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoModelForCausalLM, AutoTokenizer
 from sklearn.metrics import f1_score, accuracy_score
 from tqdm import tqdm
 from preprocess import preprocess_dataset
+
+class Gemma3ForSequenceClassification(nn.Module):
+    def __init__(self, base_model, tokenizer, num_labels=2, hidden_size=1152):
+        super().__init__()
+        self.num_labels = num_labels
+        self.tokenizer = tokenizer
+        self.model = base_model.model
+        self.score = nn.Linear(hidden_size, num_labels, bias=False)
+        device = next(base_model.parameters()).device
+        dtype = next(base_model.parameters()).dtype
+        self.score = self.score.to(device).to(dtype)
+
+    def forward(self, input_ids, attention_mask=None, labels=None):
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        hidden_states = outputs[0]
+
+        batch_size = input_ids.shape[0]
+        if self.tokenizer.pad_token_id is None:
+            sequence_lengths = -1
+        else:
+            non_pad_mask = (input_ids != self.tokenizer.pad_token_id).to(hidden_states.device, torch.int32)
+            token_indices = torch.arange(input_ids.shape[-1], device=hidden_states.device, dtype=torch.int32)
+            sequence_lengths = (token_indices * non_pad_mask).argmax(-1)
+
+        pooled_hidden_states = hidden_states[torch.arange(batch_size, device=hidden_states.device), sequence_lengths]
+
+        logits = self.score(pooled_hidden_states)
+
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.float(), labels)
+
+        from collections import namedtuple
+        Output = namedtuple('Output', ['loss', 'logits'])
+        return Output(loss=loss, logits=logits)
 
 class TextDataset(Dataset):
     def __init__(self, texts, labels, tokenizer, max_length=512):
@@ -36,7 +72,7 @@ class TextDataset(Dataset):
             'labels': torch.tensor(self.labels[idx], dtype=torch.long)
         }
 
-def train_classification_head(model, train_loader, val_loader, device, epochs=5, lr=1e-4, patience=1):
+def train_classification_head(model, train_loader, val_loader, device, epochs=5, lr=1e-4, patience=1, warmup_steps=20):
     for param in model.model.parameters():
         param.requires_grad = False
 
@@ -44,6 +80,15 @@ def train_classification_head(model, train_loader, val_loader, device, epochs=5,
         param.requires_grad = True
 
     optimizer = torch.optim.AdamW(model.score.parameters(), lr=lr, weight_decay=1e-5)
+
+    total_steps = len(train_loader) * epochs
+    from transformers import get_cosine_schedule_with_warmup
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps
+    )
+
     criterion = nn.CrossEntropyLoss()
 
     best_val_f1 = 0
@@ -65,6 +110,7 @@ def train_classification_head(model, train_loader, val_loader, device, epochs=5,
 
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             train_loss += loss.item()
 
@@ -137,7 +183,7 @@ def evaluate_clf_head(model, texts, labels, tokenizer, device, batch_size=256):
 
     return {"f1": float(f1), "accuracy": float(acc)}
 
-def train_and_eval_dataset(dataset_name, model, tokenizer, device, epochs=5, batch_size=256, patience=1, save_dir="clf_heads"):
+def train_and_eval_dataset(dataset_name, model, tokenizer, device, epochs=5, batch_size=256, patience=1, warmup_steps=20, save_dir="clf_heads"):
     print(f"\n{'='*80}")
     print(f"Processing {dataset_name}")
     print(f"{'='*80}")
@@ -162,7 +208,7 @@ def train_and_eval_dataset(dataset_name, model, tokenizer, device, epochs=5, bat
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    model, best_val_f1 = train_classification_head(model, train_loader, val_loader, device, epochs, patience=patience)
+    model, best_val_f1 = train_classification_head(model, train_loader, val_loader, device, epochs, patience=patience, warmup_steps=warmup_steps)
 
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, f"{dataset_name}_clf_head.pt")
@@ -187,13 +233,16 @@ def main():
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--patience', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--warmup_steps', type=int, default=20)
     parser.add_argument('--save_dir', type=str, default='clf_heads')
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     from config import MODEL_CONFIGS
-    model_path = MODEL_CONFIGS[args.model]["model_path"]
+    model_config = MODEL_CONFIGS[args.model]
+    model_path = model_config["model_path"]
+    model_type = model_config.get("model_type", "qwen3")
 
     print(f"Loading model from {model_path}...")
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
@@ -205,18 +254,32 @@ def main():
     all_results = []
 
     for dataset_name in args.datasets:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_path,
-            num_labels=2,
-            trust_remote_code=True,
-            pad_token_id=tokenizer.pad_token_id
-        ).to(device)
+        if model_type == "gemma3":
+            base_model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch.bfloat16,
+                trust_remote_code=True
+            ).to(device)
+            model = Gemma3ForSequenceClassification(
+                base_model,
+                tokenizer,
+                num_labels=2,
+                hidden_size=model_config["hidden_size"]
+            )
+        else:
+            model = AutoModelForSequenceClassification.from_pretrained(
+                model_path,
+                num_labels=2,
+                trust_remote_code=True,
+                pad_token_id=tokenizer.pad_token_id
+            ).to(device)
 
         result = train_and_eval_dataset(
             dataset_name, model, tokenizer, device,
             epochs=args.epochs,
             batch_size=args.batch_size,
             patience=args.patience,
+            warmup_steps=args.warmup_steps,
             save_dir=save_dir
         )
         all_results.append(result)

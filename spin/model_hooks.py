@@ -115,6 +115,10 @@ class Qwen3RepresentationExtractor:
                     layer_rep["residual_mean"] = residual_valid.mean(dim=0).cpu().float().numpy()
                 if "mlp_mean" in self.rep_types:
                     layer_rep["mlp_mean"] = mlp_valid.mean(dim=0).cpu().float().numpy()
+                if "residual" in self.rep_types:
+                    layer_rep["residual"] = residual_valid.cpu().float().numpy()
+                if "mlp" in self.rep_types:
+                    layer_rep["mlp"] = mlp_valid.cpu().float().numpy()
                 representations[layer_idx] = layer_rep
             batch_representations.append(representations)
 
@@ -233,6 +237,10 @@ class Gemma3RepresentationExtractor:
                     layer_rep["residual_mean"] = residual_valid.mean(dim=0).cpu().float().numpy()
                 if "mlp_mean" in self.rep_types:
                     layer_rep["mlp_mean"] = mlp_valid.mean(dim=0).cpu().float().numpy()
+                if "residual" in self.rep_types:
+                    layer_rep["residual"] = residual_valid.cpu().float().numpy()
+                if "mlp" in self.rep_types:
+                    layer_rep["mlp"] = mlp_valid.cpu().float().numpy()
                 representations[layer_idx] = layer_rep
             batch_representations.append(representations)
 

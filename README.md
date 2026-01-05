@@ -1,6 +1,6 @@
 # SPIN Refactored
 
-[![Demo Video](Demo_thumbnail.png)](Demo.mp4)
+![Demo](https://github.com/user-attachments/assets/7ecca815-dcd5-4eb0-b774-c17f41603f27)
 
 
 ## Pipeline Overview

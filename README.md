@@ -1,5 +1,8 @@
 # SPIN Refactored
 
+[![Demo Video](Demo_thumbnail.png)](Demo.mp4)
+
+
 ## Pipeline Overview
 
 1. **Extract Internal Representations**: Extract hidden states from transformer layers with 4 pooling strategies

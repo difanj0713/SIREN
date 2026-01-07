@@ -4,7 +4,17 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import accuracy_score, f1_score
 
-# pytorch-based linear probe with L1 regularization; no scikit-learn implementation here for gpu acceleration
+
+def compute_per_dataset_f1(y_true, y_pred, dataset_ids):
+    unique_datasets = np.unique(dataset_ids)
+    dataset_f1s = []
+    for dataset_id in unique_datasets:
+        mask = dataset_ids == dataset_id
+        dataset_f1 = f1_score(y_true[mask], y_pred[mask], average='macro')
+        dataset_f1s.append(dataset_f1)
+    return np.mean(dataset_f1s)
+
+
 class LinearProbe:
     def __init__(self, C=1.0, penalty="l1", max_iter=1000, device="cuda", batch_size=256):
         self.C = C
@@ -17,7 +27,7 @@ class LinearProbe:
         self.best_val_acc = 0
         self.best_model_state = None
 
-    def train(self, X, y, X_val=None, y_val=None, quick_eval=False, random_seed=42):
+    def train(self, X, y, X_val=None, y_val=None, val_dataset_ids=None, quick_eval=False, random_seed=42):
         torch.manual_seed(random_seed)
         np.random.seed(random_seed)
         if torch.cuda.is_available():
@@ -70,14 +80,18 @@ class LinearProbe:
                 num_batches += 1
             
             if X_val is not None and y_val is not None:
-                val_acc = self.evaluate(X_val, y_val)
+                if val_dataset_ids is not None:
+                    val_preds = self.predict(X_val)
+                    val_acc = compute_per_dataset_f1(y_val, val_preds, val_dataset_ids)
+                else:
+                    val_acc = self.evaluate(X_val, y_val)
                 if val_acc > self.best_val_acc:
                     self.best_val_acc = val_acc
                     self.best_model_state = self.model.state_dict().copy()
                     patience_counter = 0
                 else:
                     patience_counter += 1
-                
+
                 if patience_counter >= patience:
                     break
         
@@ -99,12 +113,15 @@ class LinearProbe:
         
         return np.array(predictions)
 
-    def evaluate(self, X, y, metric='accuracy'):
+    def evaluate(self, X, y, dataset_ids=None, metric='accuracy'):
         predictions = self.predict(X)
         if metric == 'accuracy':
             return accuracy_score(y, predictions)
         elif metric == 'f1_macro':
-            return f1_score(y, predictions, average='macro')
+            if dataset_ids is not None:
+                return compute_per_dataset_f1(y, predictions, dataset_ids)
+            else:
+                return f1_score(y, predictions, average='macro')
         else:
             raise ValueError(f"Unknown metric: {metric}")
 
@@ -121,7 +138,7 @@ def extract_layer_features(representations, layer_idx, rep_type, pooling):
         features.append(rep[layer_idx][key])
     return np.array(features)
 
-def train_and_evaluate_probe(train_reps, train_labels, val_reps, val_labels, layer_idx, rep_type, pooling, C_values, device="cuda", metric='accuracy'):
+def train_and_evaluate_probe(train_reps, train_labels, val_reps, val_labels, val_dataset_ids, layer_idx, rep_type, pooling, C_values, device="cuda", metric='accuracy'):
     X_train = extract_layer_features(train_reps, layer_idx, rep_type, pooling)
     X_val = extract_layer_features(val_reps, layer_idx, rep_type, pooling)
 
@@ -130,8 +147,8 @@ def train_and_evaluate_probe(train_reps, train_labels, val_reps, val_labels, lay
 
     for C in C_values:
         probe = LinearProbe(C=C, device=device)
-        probe.train(X_train, train_labels, X_val, val_labels, quick_eval=True)
-        val_score = probe.evaluate(X_val, val_labels, metric=metric)
+        probe.train(X_train, train_labels, X_val, val_labels, val_dataset_ids, quick_eval=True)
+        val_score = probe.evaluate(X_val, val_labels, val_dataset_ids, metric=metric)
         print(f"    C={C}: val_{metric}={val_score:.4f}")
 
         if val_score > best_val_score:
@@ -141,9 +158,9 @@ def train_and_evaluate_probe(train_reps, train_labels, val_reps, val_labels, lay
     print(f"    Best C={best_C} with val_{metric}={best_val_score:.4f}")
 
     final_probe = LinearProbe(C=best_C, device=device)
-    final_probe.train(X_train, train_labels, X_val, val_labels, quick_eval=False)
+    final_probe.train(X_train, train_labels, X_val, val_labels, val_dataset_ids, quick_eval=False)
 
     train_score = final_probe.evaluate(X_train, train_labels, metric=metric)
-    val_score = final_probe.evaluate(X_val, val_labels, metric=metric)
+    val_score = final_probe.evaluate(X_val, val_labels, val_dataset_ids, metric=metric)
 
     return final_probe, train_score, val_score, best_C

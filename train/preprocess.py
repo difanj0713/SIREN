@@ -13,31 +13,31 @@ XSTest: https://huggingface.co/datasets/Paul/XSTest       # Only has test set
 from datasets import DatasetDict, load_dataset
 
 
-def preprocess_dataset(dataset: str) -> DatasetDict:
+def preprocess_dataset(dataset: str, val_ratio: float = 0.2) -> DatasetDict:
     if dataset == "toxic_chat":
-        return _preprocess_toxic_chat()
+        return _preprocess_toxic_chat(val_ratio)
     elif dataset == "openai_moderation":
-        return _preprocess_openai_moderation()
+        return _preprocess_openai_moderation(val_ratio)
     elif dataset == "aegis":
-        return _preprocess_aegis()
+        return _preprocess_aegis(val_ratio)
     elif dataset == "aegis2":
-        return _preprocess_aegis2()
+        return _preprocess_aegis2(val_ratio)
     elif dataset == "wildguard":
-        return _preprocess_wildguard()
+        return _preprocess_wildguard(val_ratio)
     elif dataset == "safe_rlhf":
-        return _preprocess_safe_rlhf()
+        return _preprocess_safe_rlhf(val_ratio)
     elif dataset == "beavertails":
-        return _preprocess_beavertails()
+        return _preprocess_beavertails(val_ratio)
     elif dataset == "xstest":
-        return _preprocess_xstest()
+        return _preprocess_xstest(val_ratio)
     else:
         raise ValueError(f"Invalid dataset: {dataset}")
 
 
-def _preprocess_toxic_chat() -> DatasetDict:
+def _preprocess_toxic_chat(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("lmsys/toxic-chat", "toxicchat0124")
 
-    split = ds["train"].train_test_split(test_size=0.2, shuffle=True)
+    split = ds["train"].train_test_split(test_size=val_ratio, shuffle=True)
     out = DatasetDict(
         {
             "train": split["train"],
@@ -53,10 +53,11 @@ def _preprocess_toxic_chat() -> DatasetDict:
     return out
 
 
-def _preprocess_openai_moderation() -> DatasetDict:
+def _preprocess_openai_moderation(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("walledai/openai-moderation-dataset")
 
-    split_60_40 = ds["train"].train_test_split(test_size=0.4, shuffle=True)
+    test_val_size = val_ratio * 2
+    split_60_40 = ds["train"].train_test_split(test_size=test_val_size, shuffle=True)
     split_20_20 = split_60_40["test"].train_test_split(test_size=0.5, shuffle=True)
     out = DatasetDict(
         {
@@ -87,10 +88,10 @@ def _preprocess_openai_moderation() -> DatasetDict:
     return out
 
 
-def _preprocess_aegis() -> DatasetDict:
+def _preprocess_aegis(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("nvidia/Aegis-AI-Content-Safety-Dataset-1.0")
 
-    split = ds["train"].train_test_split(test_size=0.2, shuffle=True)
+    split = ds["train"].train_test_split(test_size=val_ratio, shuffle=True)
     out = DatasetDict(
         {
             "train": split["train"],
@@ -139,7 +140,7 @@ def _preprocess_aegis() -> DatasetDict:
     return out
 
 
-def _preprocess_aegis2() -> DatasetDict:
+def _preprocess_aegis2(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("nvidia/Aegis-AI-Content-Safety-Dataset-2.0")
     out = DatasetDict(
         {
@@ -165,14 +166,14 @@ def _preprocess_aegis2() -> DatasetDict:
     return out
 
 
-def _preprocess_wildguard() -> DatasetDict:
+def _preprocess_wildguard(val_ratio: float = 0.2) -> DatasetDict:
     train_ds = load_dataset("allenai/wildguardmix", "wildguardtrain")
     test_ds = load_dataset("allenai/wildguardmix", "wildguardtest")
 
     train_split = train_ds["train"]
     test_split = test_ds["test"]
 
-    split = train_split.train_test_split(test_size=0.2, shuffle=True)
+    split = train_split.train_test_split(test_size=val_ratio, shuffle=True)
     out = DatasetDict({"train": split["train"], "validation": split["test"], "test": test_split})
 
     def to_binary_label(example):
@@ -194,10 +195,10 @@ def _preprocess_wildguard() -> DatasetDict:
     return out
 
 
-def _preprocess_safe_rlhf() -> DatasetDict:
+def _preprocess_safe_rlhf(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("PKU-Alignment/PKU-SafeRLHF", "default")
 
-    split = ds["train"].train_test_split(test_size=0.2, shuffle=True)
+    split = ds["train"].train_test_split(test_size=val_ratio, shuffle=True)
     out = DatasetDict(
         {
             "train": split["train"],
@@ -224,11 +225,11 @@ def _preprocess_safe_rlhf() -> DatasetDict:
     return out
 
 
-def _preprocess_beavertails() -> DatasetDict:
+def _preprocess_beavertails(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("PKU-Alignment/BeaverTails")
     base = DatasetDict({"train": ds["30k_train"], "test": ds["30k_test"]})
 
-    split = base["train"].train_test_split(test_size=0.2, shuffle=True)
+    split = base["train"].train_test_split(test_size=val_ratio, shuffle=True)
     out = DatasetDict({"train": split["train"], "validation": split["test"], "test": base["test"]})
 
     def to_label_and_text(example):
@@ -248,10 +249,11 @@ def _preprocess_beavertails() -> DatasetDict:
     return out
 
 
-def _preprocess_xstest() -> DatasetDict:
+def _preprocess_xstest(val_ratio: float = 0.2) -> DatasetDict:
     ds = load_dataset("Paul/XSTest")
 
-    split_60_40 = ds["train"].train_test_split(test_size=0.4, shuffle=True)
+    test_val_size = val_ratio * 2
+    split_60_40 = ds["train"].train_test_split(test_size=test_val_size, shuffle=True)
     split_20_20 = split_60_40["test"].train_test_split(test_size=0.5, shuffle=True)
     out = DatasetDict(
         {

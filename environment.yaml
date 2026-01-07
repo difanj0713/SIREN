@@ -1,4 +1,4 @@
-name: spin-safety
+name: siren
 channels:
   - defaults
 dependencies:

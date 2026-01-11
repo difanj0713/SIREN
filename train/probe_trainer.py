@@ -33,17 +33,17 @@ class LinearProbe:
         if torch.cuda.is_available():
             torch.cuda.manual_seed(random_seed)
         X_tensor = torch.FloatTensor(X).to(self.device)
-        y_tensor = torch.LongTensor(y).to(self.device)
-        
+        y_tensor = torch.FloatTensor(y).to(self.device)
+
         input_dim = X.shape[1]
-        self.model = nn.Linear(input_dim, 2).to(self.device)
-        
+        self.model = nn.Linear(input_dim, 1).to(self.device)
+
         nn.init.kaiming_normal_(self.model.weight, mode='fan_in', nonlinearity='relu')
         nn.init.zeros_(self.model.bias)
-        
+
         l1_lambda = 1.0 / self.C
         optimizer = optim.Adam(self.model.parameters(), lr=0.01)
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.BCEWithLogitsLoss()
         
         max_epochs = 100 if quick_eval else 500
         patience = 15 if quick_eval else 50
@@ -64,9 +64,9 @@ class LinearProbe:
                 batch_indices = indices[i:i+self.batch_size]
                 batch_X = X_tensor[batch_indices]
                 batch_y = y_tensor[batch_indices]
-                
+
                 optimizer.zero_grad()
-                outputs = self.model(batch_X)
+                outputs = self.model(batch_X).squeeze()
                 loss = criterion(outputs, batch_y)
                 
                 if self.penalty == "l1":
@@ -103,14 +103,15 @@ class LinearProbe:
             raise ValueError("Model not trained yet")
         self.model.eval()
         predictions = []
-        
+
         with torch.no_grad():
             for i in range(0, len(X), self.batch_size):
                 batch_X = torch.FloatTensor(X[i:i+self.batch_size]).to(self.device)
-                outputs = self.model(batch_X)
-                batch_preds = torch.argmax(outputs, dim=1).cpu().numpy()
+                outputs = self.model(batch_X).squeeze()
+                probs = torch.sigmoid(outputs)
+                batch_preds = (probs > 0.5).cpu().numpy().astype(int)
                 predictions.extend(batch_preds)
-        
+
         return np.array(predictions)
 
     def evaluate(self, X, y, dataset_ids=None, metric='accuracy'):
@@ -129,7 +130,7 @@ class LinearProbe:
         if not self.trained:
             raise ValueError("Model not trained yet")
         with torch.no_grad():
-            return torch.abs(self.model.weight[1] - self.model.weight[0]).cpu().numpy()
+            return torch.abs(self.model.weight.squeeze()).cpu().numpy()
 
 def extract_layer_features(representations, layer_idx, rep_type, pooling):
     key = f"{rep_type}_{pooling}"

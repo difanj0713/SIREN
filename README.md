@@ -2,7 +2,8 @@
 
 Official repository for our ACL submission. A demo of our trained model in deployment:
 
-![Demo](https://github.com/user-attachments/assets/7ecca815-dcd5-4eb0-b774-c17f41603f27)
+![Demo2](https://github.com/user-attachments/assets/28b193b1-faf7-41ab-83c1-c073799ef85e)
+
 
 ## Setup
 

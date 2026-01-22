@@ -1,8 +1,8 @@
 # SIREN: Leveraging Internal Representations for LLM Safeguard
 
-Official repository for our ACL submission. A demo of our trained model in deployment:
+Official repository for our paper ***SIREN: Leveraging Internal Representations for LLM Safeguard***. A demo of our trained model in deployment:
 
-![Demo2](https://github.com/user-attachments/assets/28b193b1-faf7-41ab-83c1-c073799ef85e)
+![Demo2](https://github.com/user-attachments/assets/0856b8d5-2547-4520-8869-4722391c1a60)
 
 
 ## Setup
